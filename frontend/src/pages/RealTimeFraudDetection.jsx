@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,6 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
-  AlertTriangle, 
-  CheckCircle2, 
   RefreshCw, 
   Zap, 
   History, 
@@ -20,6 +18,10 @@ import {
   Plane,
   HelpCircle
 } from 'lucide-react';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const RealTimeFraudDetection = () => {
   const [loading, setLoading] = useState(false);
@@ -41,6 +43,20 @@ const RealTimeFraudDetection = () => {
   const locations = ['Home City', 'Nearby City', 'Different State', 'Abroad', 'High Risk Area'];
   const transactionTypes = ['Credit', 'Debit', 'Transfer'];
   const deviceTypes = ['Mobile', 'Web', 'ATM', 'In-Person'];
+
+  // Fetch history on load
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await axios.get(`${API}/history`);
+      setHistory(res.data);
+    } catch (err) {
+      console.error("Failed to fetch history", err);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -73,11 +89,11 @@ const RealTimeFraudDetection = () => {
         break;
     }
     setFormData(newData);
-    // Auto predict after a short delay to allow state update visual
+    // Auto predict after a short delay
     setTimeout(() => predictFraud(newData), 100);
   };
 
-  const predictFraud = (dataToPredict = formData) => {
+  const predictFraud = async (dataToPredict = formData) => {
     if (!dataToPredict.amount || dataToPredict.amount <= 0) {
       alert("Please enter a valid amount");
       return;
@@ -86,70 +102,31 @@ const RealTimeFraudDetection = () => {
     setLoading(true);
     setResult(null);
 
-    // Simulate API delay
-    setTimeout(() => {
-      const amount = parseFloat(dataToPredict.amount);
-      const time = parseInt(dataToPredict.time);
-      const location = dataToPredict.location;
-      const device = dataToPredict.device;
-      const daysSince = parseInt(dataToPredict.daysSince);
-
-      let riskScore = 10; // Base risk
-      let reasons = [];
-
-      // Business Logic Simulation
-      if (amount > 1000) {
-        riskScore += 30;
-        reasons.push("High transaction amount");
-      }
-      if (time >= 0 && time <= 6) {
-        riskScore += 20;
-        reasons.push("Unusual time (Late night/Early morning)");
-      }
-      if (location === 'Abroad') {
-        riskScore += 35;
-        reasons.push("Location: Abroad");
-      } else if (location === 'High Risk Area') {
-        riskScore += 40;
-        reasons.push("Location: High Risk Area");
-      } else if (location === 'Different State') {
-        riskScore += 15;
-      }
-
-      if (device === 'ATM' && time < 6) {
-        riskScore += 20;
-        reasons.push("Late night ATM withdrawal");
-      }
-
-      if (daysSince > 30 && amount > 500) {
-        riskScore += 15;
-        reasons.push("Large amount after dormancy");
-      }
-
-      // Cap risk score
-      riskScore = Math.min(99, Math.max(1, riskScore));
-
-      const isFraud = riskScore > 60;
-      const status = isFraud ? "FRAUD DETECTED" : (riskScore > 30 ? "REVIEW NEEDED" : "LEGITIMATE");
-      
-      const newResult = {
-        status,
-        riskScore,
-        isFraud,
-        classicalConf: Math.floor(Math.random() * (99 - 85) + 85),
-        quantumConf: Math.floor(Math.random() * (95 - 75) + 75),
-        agreement: Math.random() > 0.2 ? "Models Agree" : "Models Diverge",
-        reasons: reasons.length > 0 ? reasons : ["Normal transaction pattern"],
-        timestamp: new Date().toLocaleTimeString()
+    try {
+      // Call FastAPI Backend
+      const payload = {
+        amount: parseFloat(dataToPredict.amount),
+        time: parseInt(dataToPredict.time),
+        merchant: dataToPredict.merchant,
+        location: dataToPredict.location,
+        type: dataToPredict.type,
+        device: dataToPredict.device,
+        daysSince: parseInt(dataToPredict.daysSince),
+        transactionsToday: parseInt(dataToPredict.transactionsToday)
       };
 
-      setResult(newResult);
-      setHistory(prev => [
-        { ...dataToPredict, ...newResult, date: new Date().toLocaleDateString() },
-        ...prev
-      ]);
+      const response = await axios.post(`${API}/predict`, payload);
+      setResult(response.data);
+      
+      // Refresh history
+      fetchHistory();
+
+    } catch (error) {
+      console.error("Prediction failed", error);
+      alert("Failed to get prediction from server");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   const clearForm = () => {
@@ -167,12 +144,11 @@ const RealTimeFraudDetection = () => {
   };
 
   const downloadHistory = () => {
-    const headers = ["Date", "Time", "Amount", "Merchant", "Location", "Status", "Risk Score"];
+    const headers = ["Date", "Amount", "Merchant", "Location", "Status", "Risk Score"];
     const csvContent = [
       headers.join(","),
       ...history.map(row => [
-        row.date, 
-        row.timestamp, 
+        new Date(row.timestamp).toLocaleString(), 
         row.amount, 
         row.merchant, 
         row.location, 
@@ -200,7 +176,7 @@ const RealTimeFraudDetection = () => {
           Real-Time Fraud Detection
         </h2>
         <p className="text-muted-foreground mt-2">
-          Simulate transactions and get instant predictions from our Quantum-Classical hybrid engine.
+          Live prediction engine powered by FastAPI & MongoDB.
         </p>
       </div>
 
@@ -447,59 +423,59 @@ const RealTimeFraudDetection = () => {
       </div>
 
       {/* History Section */}
-      {history.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <History className="h-5 w-5 text-primary" />
-              <CardTitle>Prediction History</CardTitle>
-            </div>
-            <Button variant="outline" size="sm" onClick={downloadHistory} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download CSV
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Prediction</TableHead>
-                  <TableHead>Risk Score</TableHead>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5 text-primary" />
+            <CardTitle>Prediction History (MongoDB)</CardTitle>
+          </div>
+          <Button variant="outline" size="sm" onClick={downloadHistory} className="gap-2">
+            <Download className="h-4 w-4" />
+            Download CSV
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Merchant</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Prediction</TableHead>
+                <TableHead>Risk Score</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((row, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-xs">
+                    {new Date(row.timestamp).toLocaleTimeString()}
+                  </TableCell>
+                  <TableCell>${row.amount}</TableCell>
+                  <TableCell>{row.merchant}</TableCell>
+                  <TableCell>{row.location}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={
+                      row.isFraud 
+                        ? "bg-destructive/10 text-destructive border-destructive/20" 
+                        : (row.riskScore > 30 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-green-500/10 text-green-500 border-green-500/20")
+                    }>
+                      {row.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Progress value={row.riskScore} className="w-16 h-2" indicatorColor={row.isFraud ? 'bg-destructive' : 'bg-green-500'} />
+                      <span className="text-xs font-medium">{row.riskScore}</span>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-mono text-xs">{row.timestamp}</TableCell>
-                    <TableCell>${row.amount}</TableCell>
-                    <TableCell>{row.merchant}</TableCell>
-                    <TableCell>{row.location}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={
-                        row.isFraud 
-                          ? "bg-destructive/10 text-destructive border-destructive/20" 
-                          : (row.riskScore > 30 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-green-500/10 text-green-500 border-green-500/20")
-                      }>
-                        {row.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Progress value={row.riskScore} className="w-16 h-2" indicatorColor={row.isFraud ? 'bg-destructive' : 'bg-green-500'} />
-                        <span className="text-xs font-medium">{row.riskScore}</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 };
