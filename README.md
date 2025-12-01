@@ -207,8 +207,8 @@ This project is licensed under the **MIT License** - see the LICENSE file for de
 
 For issues, questions, or suggestions:
 - Open an issue on GitHub
-- Contact via LinkedIn
-- Email: your.email@example.com
+- Contact via LinkedIn --> www.linkedin.com/in/baladithya-adigopula-98a3b1298
+- Email: adithya745.adigopula@gmail.com
 
 ---
 
